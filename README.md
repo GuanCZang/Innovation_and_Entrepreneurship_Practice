@@ -1,2 +1,11 @@
-# Innovation_and_Entrepreneurship_Practice
-It's used to store practical course work.
+# 创新创业实践项目
+## 小组成员：林星慧 GuanCZang
+## 所做项目
+### 项目名称：SM3 长度扩展攻击
+ - 简介：
+ - 完成人：林星慧
+## 项目清单：
+### 已完成项目：
+### 未完成项目：
+### 有问题的项目及问题：
+
