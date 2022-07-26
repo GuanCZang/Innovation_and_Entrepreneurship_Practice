@@ -2,9 +2,10 @@
 ## 1 实验目标
 类比哈希函数 MD 结构的长度扩展攻击，对 SM3 算法进行攻击。
 ## 2 SM3 算法原理
-SM3 算法主要分为:消息填充、消息扩展、迭代压缩、输出结果 四个步骤。经多轮迭代压缩后输出 256 位（32 字节）的数值。
+SM3 算法对长度为 $l (l<2^{64})$ 比特的消息 $m$ 经填充和压缩迭代生成长 $256$ 比特的杂凑值。  
+主要步骤分为：消息填充、消息扩展、迭代压缩、输出结果 四个步骤。经多轮迭代压缩后输出 256 位（32 字节）的数值。
 ### 2.1 消息填充
-SM3 算法将消息分为若干组，每组消息长 512 位（64 字节）。最后一组若不足 512 位需按规则进行填充。  
+SM3 算法将消息 $m$ 分为若干组，每组长 512 位（64 字节）。若消息长度 $l\equiv0\ mod\ 512$ 仍需要对消息进行填充，即消息的填充长度为 $[\ 1,512\ ]$。  
 <br>
 **消息填充规则**：  
 已知消息 m 长 l 比特，若 l 为 512 的整数倍则无需填充。若不是，则填充步骤如下：
@@ -24,7 +25,7 @@ $W_{j}\leftarrow P_{1}(W_{j-16}\oplus W_{j-9}\oplus(W_{j-3}\lll15))\oplus(W_{j-1
  - 生成第 69 至 132 个（后 64 个）消息字（$j\in 0\rightarrow 63$）：  
 $W_{j}'=W_{j}\oplus W_{j+4}$  
 
-**伪码表示**：
+**伪码表示**：  
 将消息分组 $B^{(i)}$ 按以下方法扩展生成 132 个字 $W_{0},W_{1},...,W_{67},W_{0}',W_{1}',...,W_{63}'$，用于压缩函数 $CF$：  
 a) 将消息分组 $B^{(i)}$ 划分为 16 个字 $W_{0},W_{1},...,W_{15}$  
 b) FOR $j=16$ TO $67$  
@@ -35,15 +36,20 @@ c) FOR $j=0$ TO $63$
 &emsp;ENDFOR
 ### 2.3 迭代压缩
 初始 IV 向量分别置于 A,B,C,D,E,F,G 8 个字寄存器中，每个字寄存器存储 32 位变量。具体数值见参考文献[^1]。  
-每计算一次压缩函数都将 8 个字寄存器中的向量进行 64 轮迭代，每轮分别使用前 68 个消息字中的一个 $W_{j}$ 与后 64 个消息字中的 $W_{j}'$ 计算。64 轮迭代结束后将最后 8 个字寄存器中的向量与初始 IV 异或，得到本次压缩函数计算的输出。  
+每计算一次压缩函数都将 8 个字寄存器中的向量进行 64 轮迭代，每轮分别使用前 68 个消息字中的一个 $W_{j}$ 与后 64 个消息字中的 $W_{j}'$ 计算。64 轮迭代结束后将最后 8 个字寄存器中的向量与初始 IV 异或，得到本次压缩函数计算的输出，该输出作为下一次调用压缩函数时的初值。  
 每一次计算压缩函数依次使用一个消息分组。直至所有消息分组全部参与计算，输出的压缩函数结果即为最终杂凑值。  
+
 **压缩函数计算**：  
-![SM3压缩函数](D:/chuangxinchuangyeshijian/20220513/SM3压缩函数.png)  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3CompressionFunction.png" width="500" />
+</div>
+<br>
+
 **伪码表示**：  
 令 $A,B,C,D,E,F,G,H$ 为字寄存器，$SS1,SS2,TT1,TT2$ 为中间变量，压缩函数 $V^{i+1}=CF(V^{(i)},B^{(i)}), 0\leq i\leq n-1$。计算过程描述如下：
-$ABCDEFGH\leftarrowV^{(i)}$  
+$ABCDEFGH\leftarrow V^{(i)}$  
 FOR $j=0$ TO $63$  
-&emsp;$SS1\leftarrow((A\lll12)+E+(T_{j}\lllj))\lll7$  
+&emsp;$SS1\leftarrow((A\lll12)+E+(T_{j}\lll j))\lll 7$  
 &emsp;$SS2\leftarrow SS1\oplus(A\lll12)$  
 &emsp;$TT1\leftarrow FF_{j}(A,B,C)+D+SS2+W_{j}'$  
 &emsp;$TT2\leftarrow GG_{j}(E,F,G)+H+SS1+W_{J}$  
@@ -56,9 +62,17 @@ FOR $j=0$ TO $63$
 &emsp;$F\leftarrow E$  
 &emsp;$E\leftarrow P_{0}(TT2)$  
 ENDFOR  
-$V^{(i+1)}\leftarrowABCDEFGH\oplusV^{(i)}$  
+$V^{(i+1)}\leftarrow ABCDEFGH\oplus V^{(i)}$  
 其中，$FF_{j}$ 为 $FF$ 函数，$GG_{j}$ 为 $GG$ 函数；字的存储为大端（big-endian）格式。  
+### 2.4 输出结果
+将最后一轮压缩函数得到的 $A,B,C,D,E,F,G,H$ 八个向量拼接，输出的结果即为 SM3 算法的最终输出。  
 
+**伪码表示**：  
+$A.B.C.D.E.F.G.H\leftarrow V^{(n)}$  
+输出 256 比特的杂凑值 $y=ABCDEFGH$
+## 3 攻击思路：
+1. 随机生成一串消息 $m$ 作为原始消息，长度不限，经 SM3 加密后得到 8 个向量组成的 $H_{1}$。
+2. 生成任意一串附加消息 $m'$。以 $H_{1}$ 的 8 个向量值作为初始 IV 加密 $m'$。
 
 [^1]:[SM3密码杂凑算法-国家密码管理局-2010.12](https://www.oscca.gov.cn/sca/xxgk/2010-12/17/1002389/files/302a3ada057c4a73830536d03e683110.pdf)
 
