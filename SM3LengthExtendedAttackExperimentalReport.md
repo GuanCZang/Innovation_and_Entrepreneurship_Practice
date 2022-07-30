@@ -15,8 +15,8 @@ SM3 算法将消息 $m$ 分为若干组，每组长 512 位（64 字节）。
 
 **消息填充规则**：  
 已知消息 $m$ 长 $l$ 比特，若 $l$ 为 512 的整数倍则无需填充。若不是，则填充步骤如下：
- - 在 $m$ 末尾补充 1 比特的字符 “1”。
- - 填充 $k$ 比特“0”，其中 $k$ 是满足 $k≡(512-64)\ mod\ 512$ 的最小非负整数。
+ - 在 $m$ 末尾补充 1 比特的字符 “$1$”。
+ - 填充 $k$ 比特“$0$”，其中 $k$ 是满足 $k≡(512-64)\ mod\ 512$ 的最小非负整数。
  - 添加一个 64 比特消息 $m$ 的长度 l，高位补 0。
 ### 2.2 消息扩展
 单位换算规则：1 消息字= 32 位= 8 个 16 进制数字= 4 字节。  
@@ -78,15 +78,73 @@ $V^{(i+1)}\leftarrow ABCDEFGH\oplus V^{(i)}$
 $A.B.C.D.E.F.G.H\leftarrow V^{(n)}$  
 输出 256 比特的杂凑值 $y=ABCDEFGH$
 ## 3 攻击思路：
-1. 随机生成一串消息 $m$ 作为原始消息（$|m|=l$），长度 $l$ 不限，经 SM3 加密后得到 8 个向量组成的 $H_{1}$。
+1. 随机生成一串消息 $m$ 作为原始消息（$|m|=l$），长度 $l (l<2^{64})$ 比特，经 SM3 加密后得到 8 个向量组成的 $H_{1}$。
 2. 生成任意一串附加消息 $(append||padding')$。  
-$append$ 部分为攻击者需要加入的新消息；$padding'$ 部分包括 1 比特 “$1$”、满足 $(k+|append|+1\equiv448\ mod\ 512)$ 的 $k$ 比特 $0$、以及 $64$ 比特 $\lceil (l-448)/512\rceil+1+|append|$（原始消息长度+原始消息填充长度+攻击者加入的新消息长度）。  
+$append$ 部分为攻击者需要加入的新消息；$padding'$ 部分包括 1 比特 “$1$”、满足 $(k+|append|+1\equiv448\ mod\ 512)$ 的 $k$ 比特 $0$、以及 $64$ 比特 $(\lceil (l-448)/512\rceil+1)\times512+|append|$（原始消息长度+原始消息填充长度+攻击者加入的新消息长度）。  
 以 $H_{1}$ 的 8 个向量值作为初始值，对 $(append||padding')$ 进行消息扩展与压缩函数计算，得到 $H_{2}$。
 4. 输出伪造成功的新消息 $m'=m||padding||append$ 及其 SM3 值 $H_{2}$。其中 $padding$ 为原始消息经消息填充后增加的部分。
 ## 4 实现过程
-```c
-```
+SM3 算法源代码参考国密局商密检测中心附件[^2]。  
+### 4.1 代码文件
+SM3 长度扩展攻击头文件：https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3.h  
+SM3 长度扩展攻击C语言源文件：https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/Length_extension_attack_for_SM3.c
+
+### 4.2 代码运行过程
+**SM3.h 文件依据源码进行如下修改：**  
+1. 考虑到使用原有结构体，初始 IV、消息长度会受到影响。定义扩展攻击过程需要用到的结构体。  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess1.jpg" width="500" />
+</div>
+
+2. 源码中部分头文件与源程序文件中命名存在差异，对头文件中部分函数名进行修改。  
+加入源程序文件中增加的函数。  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess2.jpg" width="700" />
+</div>
+
+**Length_extension_attack_for_SM3.c 文件依据源码进行如下修改：**  
+1. 加入编写过程需要使用的头文件。  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess3.jpg" width="250" />
+</div>
+
+2. 对 SM3_STATE 结构体命名，定义扩展攻击初始化函数。其中消息长度为 (原始消息 $m$ || 原始消息填充 $padding$)，通过 SM3_STATE 结构体的 state 数组继承 $H_1$。  
+【由于 SS.state[i] 与 md->state[i] 地址不同，且未找到正确传递参数的方式，扩展攻击部分的初始向量设定失败】  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess4.jpg" width="900" />
+</div>
+
+3. 将输入消息依次存入数组并判断是否可以进行压缩，由于使用到新的结构体所以定义了新的过程函数。  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess5.jpg" width="1000" />
+</div>
+
+4. 判断消息的填充情况进行填充并复制输出，由于使用到新的结构体所以定义了新的过程函数。同时因为不确定消息长度所以将高位设置为依消息长度设定。  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess6_1.jpg" width="1100" />
+<br>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess6_2.jpg" width="900" />
+</div>
+
+5. 对扩展攻击部分需要用到的所有步骤进行整合。  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess7.jpg" width="800" />
+</div>
+
+6. 输出原始消息及其哈希值部分。  
+注释部分为测试加入填充消息 'd','e','f' 后的新消息内容，由于结构体地址问题未能成功获得 H_{1}。  
+最后输出伪造新消息对应的哈希值。  
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess8_1.jpg" width="500" />
+<br>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackProcess8_2.jpg" width="500" />
+</div>
+
 ## 5 运行结果截图
+<div align=center>
+<img src="https://github.com/GuanCZang/Innovation_and_Entrepreneurship_Practice/blob/LengthExtensionAttackForSM3/SM3LengthExtendedAttackResult.jpg" width="600" />
+</div>
 
 [^1]:[SM3密码杂凑算法-国家密码管理局-2010.12](https://www.oscca.gov.cn/sca/xxgk/2010-12/17/1002389/files/302a3ada057c4a73830536d03e683110.pdf)
+[^2]:[SM3算法源代码-国家密码管理局商用密码检测中心-2017.05.05](http://www.scctc.org.cn/templates/General/index.aspx?nodeid=73&page=ContentPage&contentid=545)
 
